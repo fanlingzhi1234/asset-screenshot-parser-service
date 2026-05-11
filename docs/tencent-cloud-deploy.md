@@ -41,6 +41,7 @@ Required production values:
 
 - `APP_ENV=production`
 - `DATABASE_URL=sqlite:///./data/parser.db`
+- `PYTHON_IMAGE=mirror.gcr.io/library/python:3.11-slim`
 - `OCR_PROVIDER=umi_http`
 - `UMI_OCR_BASE_URL=http://<umi-ocr-host>:1224`
 - `API_KEY=<strong-random-key>`
@@ -49,11 +50,11 @@ Required production values:
 
 ```bash
 cd /opt/asset-screenshot-parser-service
-bash scripts/deploy-production.sh
+scripts/deploy-production.sh
 curl -H "X-API-Key: <key>" http://127.0.0.1:8010/api/v1/health
 ```
 
-If the server directory is a git checkout, run the guard first:
+The deploy script pulls `main`, validates the release guard, validates Docker Compose, rebuilds the `parser` service, and checks health.
 
 ```bash
 bash scripts/guard-production-release.sh

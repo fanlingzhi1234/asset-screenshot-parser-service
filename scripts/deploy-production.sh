@@ -1,26 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/asset-screenshot-parser-service}"
-IMAGE_NAME="${IMAGE_NAME:-asset-screenshot-parser-service}"
-CONTAINER_NAME="${CONTAINER_NAME:-asset-screenshot-parser-service}"
-PORT="${APP_PORT:-8010}"
+SERVICE_NAME="${SERVICE_NAME:-parser}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8010/api/v1/health}"
+PRODUCTION_BRANCH="${PRODUCTION_BRANCH:-main}"
+REMOTE_NAME="${REMOTE_NAME:-origin}"
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+git fetch "$REMOTE_NAME" --tags
+git checkout "$PRODUCTION_BRANCH"
+git pull --ff-only "$REMOTE_NAME" "$PRODUCTION_BRANCH"
+
+PRODUCTION_BRANCH="$PRODUCTION_BRANCH" REMOTE_NAME="$REMOTE_NAME" scripts/guard-production-release.sh
 
 if [[ ! -f ".env" ]]; then
   echo "Missing .env. Create it from .env.example before deployment." >&2
   exit 1
 fi
 
-docker build -t "${IMAGE_NAME}:latest" .
-docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
-docker rm "${CONTAINER_NAME}" >/dev/null 2>&1 || true
-docker run -d \
-  --name "${CONTAINER_NAME}" \
-  --restart unless-stopped \
-  --env-file .env \
-  -p "${PORT}:8010" \
-  -v "${APP_DIR}/data:/app/data" \
-  "${IMAGE_NAME}:latest"
+docker compose config >/dev/null
+docker compose up -d --build "$SERVICE_NAME"
 
-echo "Deployed ${CONTAINER_NAME} on port ${PORT}"
+for attempt in $(seq 1 20); do
+  if curl -fsS "$HEALTH_URL" >/dev/null; then
+    health_ok=true
+    break
+  fi
+  sleep 2
+done
 
+if [[ "${health_ok:-false}" != "true" ]]; then
+  docker compose ps
+  fail_log="$(docker compose logs --tail 80 "$SERVICE_NAME" 2>/dev/null || true)"
+  printf '%s\n' "$fail_log" >&2
+  printf 'Production deploy failed: health check did not pass: %s\n' "$HEALTH_URL" >&2
+  exit 1
+fi
+
+printf 'Production deploy complete: branch=%s commit=%s service=%s health=%s\n' \
+  "$PRODUCTION_BRANCH" \
+  "$(git rev-parse --short HEAD)" \
+  "$SERVICE_NAME" \
+  "$HEALTH_URL"

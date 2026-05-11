@@ -1,4 +1,5 @@
-FROM python:3.11-slim AS runtime
+ARG PYTHON_IMAGE=mirror.gcr.io/library/python:3.11-slim
+FROM ${PYTHON_IMAGE} AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -18,4 +19,3 @@ COPY README.md ./
 EXPOSE 8010
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010"]
-

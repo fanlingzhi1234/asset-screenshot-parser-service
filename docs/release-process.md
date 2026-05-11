@@ -18,6 +18,12 @@ python -m compileall app tests
 docker build -t asset-screenshot-parser-service:local .
 ```
 
+If Docker Hub is slow or blocked, keep the default mirror image:
+
+```env
+PYTHON_IMAGE=mirror.gcr.io/library/python:3.11-slim
+```
+
 ## CI Gate
 
 Pushing to `main` triggers GitHub Actions:
@@ -88,4 +94,3 @@ Record the following in the release note:
 - Docker build result.
 - Cloud health check response.
 - Rollback target.
-
