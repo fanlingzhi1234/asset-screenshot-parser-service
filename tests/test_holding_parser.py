@@ -42,6 +42,32 @@ def test_parse_tonghuashun_mobile_ocr_lines() -> None:
     assert snapshot.warnings == []
 
 
+def test_parse_tonghuashun_filters_mobile_navigation_noise_and_repairs_number() -> None:
+    payload = OCRPayload(
+        provider="fixture",
+        lines=[
+            {"text": "中中", "bbox": {"x_min": 50, "y_min": 40, "x_max": 110, "y_max": 70}},
+            {"text": "万向钱潮", "bbox": {"x_min": 50, "y_min": 474, "x_max": 168, "y_max": 506}},
+            {"text": "12,348.00", "bbox": {"x_min": 50, "y_min": 528, "x_max": 164, "y_max": 556}},
+            {"text": "-1.808.18", "bbox": {"x_min": 286, "y_min": 478, "x_max": 404, "y_max": 506}},
+            {"text": "-12.699%", "bbox": {"x_min": 292, "y_min": 528, "x_max": 404, "y_max": 556}},
+            {"text": "700", "bbox": {"x_min": 524, "y_min": 478, "x_max": 574, "y_max": 506}},
+            {"text": "700", "bbox": {"x_min": 524, "y_min": 528, "x_max": 574, "y_max": 556}},
+            {"text": "20.207", "bbox": {"x_min": 742, "y_min": 478, "x_max": 822, "y_max": 506}},
+            {"text": "17.640", "bbox": {"x_min": 742, "y_min": 528, "x_max": 822, "y_max": 556}},
+            {"text": "首页 行情", "bbox": {"x_min": 46, "y_min": 1650, "x_max": 210, "y_max": 1690}},
+            {"text": "自选 交易 资讯 理财", "bbox": {"x_min": 260, "y_min": 1650, "x_max": 820, "y_max": 1690}},
+        ],
+    )
+
+    snapshot = parse_holdings_from_ocr_payload(ocr_payload=payload, source_platform="ths_stock")
+
+    assert snapshot.summary.position_count == 1
+    assert snapshot.positions[0].display_name == "万向钱潮"
+    assert snapshot.positions[0].profit_amount == -1808.18
+    assert snapshot.warnings == []
+
+
 def test_parse_alipay_mobile_ocr_lines() -> None:
     payload = OCRPayload(
         provider="fixture",
@@ -74,3 +100,31 @@ def test_parse_alipay_mobile_ocr_lines() -> None:
     assert snapshot.positions[1].profit_amount == 635.16
     assert snapshot.warnings == []
 
+
+def test_parse_alipay_filters_marketing_and_navigation_noise() -> None:
+    payload = OCRPayload(
+        provider="fixture",
+        lines=[
+            {"text": "AI迭代机会", "bbox": {"x_min": 60, "y_min": 220, "x_max": 250, "y_max": 260}},
+            {"text": "我的持有吕", "bbox": {"x_min": 56, "y_min": 390, "x_max": 190, "y_max": 430}},
+            {"text": "投资锦囊乘风A/变革，投资美股，近3年同类第2", "bbox": {"x_min": 132, "y_min": 1408, "x_max": 850, "y_max": 1450}},
+            {"text": "3", "bbox": {"x_min": 584, "y_min": 1408, "x_max": 596, "y_max": 1450}},
+            {"text": "配置机会", "bbox": {"x_min": 58, "y_min": 1780, "x_max": 174, "y_max": 1820}},
+            {"text": "基金市场", "bbox": {"x_min": 100, "y_min": 1900, "x_max": 190, "y_max": 1940}},
+            {"text": "机会", "bbox": {"x_min": 330, "y_min": 1900, "x_max": 390, "y_max": 1940}},
+            {"text": "中欧中证A50指数A", "bbox": {"x_min": 56, "y_min": 1584, "x_max": 278, "y_max": 1622}},
+            {"text": "23,263.39", "bbox": {"x_min": 488, "y_min": 1584, "x_max": 626, "y_max": 1622}},
+            {"text": "0.00", "bbox": {"x_min": 528, "y_min": 1636, "x_max": 590, "y_max": 1662}},
+            {"text": "+3,504.59", "bbox": {"x_min": 748, "y_min": 1584, "x_max": 878, "y_max": 1622}},
+            {"text": "+17.52%", "bbox": {"x_min": 772, "y_min": 1636, "x_max": 874, "y_max": 1662}},
+        ],
+    )
+
+    snapshot = parse_holdings_from_ocr_payload(ocr_payload=payload, source_platform="alipay_fund")
+
+    assert snapshot.summary.position_count == 1
+    assert snapshot.positions[0].display_name == "中欧中证A50指数A"
+    assert snapshot.positions[0].market_value == 23263.39
+    assert snapshot.positions[0].profit_amount == 3504.59
+    assert snapshot.positions[0].profit_pct == 17.52
+    assert snapshot.warnings == []

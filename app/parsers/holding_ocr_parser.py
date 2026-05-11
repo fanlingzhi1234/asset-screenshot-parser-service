@@ -36,6 +36,12 @@ _THS_IGNORE_TEXTS = {
     "止盈止损",
     "持仓资讯",
     "资产分析",
+    "首页",
+    "行情",
+    "自选",
+    "交易",
+    "资讯",
+    "理财",
 }
 
 _ALIPAY_IGNORE_TEXTS = {
@@ -53,7 +59,13 @@ _ALIPAY_IGNORE_TEXTS = {
     "持有收益/率",
     "定投",
     "投资锦囊",
+    "配置机会",
+    "基金市场",
+    "机会",
 }
+
+_THS_NOISE_KEYWORDS = ("首页", "行情", "自选", "交易", "资讯", "理财")
+_ALIPAY_NOISE_KEYWORDS = ("投资锦囊", "配置机会", "基金市场")
 
 
 def parse_holdings_from_ocr_payload(
@@ -111,7 +123,7 @@ def _parse_tonghuashun(lines: list[dict[str, Any]]) -> tuple[list[dict[str, Any]
         if row_lines:
             rows.append(_build_ths_row(row_lines, warnings))
 
-    rows = [row for row in rows if row.get("display_name")]
+    rows = [row for row in rows if _is_valid_ths_row(row)]
     if not rows:
         raise ValueError("未能从 OCR 文本中识别同花顺持仓行")
     return rows, warnings
@@ -136,7 +148,7 @@ def _parse_alipay(lines: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], li
         if row_lines:
             rows.append(_build_alipay_row(group, row_lines, warnings))
 
-    rows = [row for row in rows if row.get("display_name")]
+    rows = [row for row in rows if _is_valid_alipay_row(row)]
     if not rows:
         raise ValueError("未能从 OCR 文本中识别支付宝基金持仓行")
     return rows, warnings
@@ -161,8 +173,6 @@ def _build_ths_row(row_lines: list[dict[str, Any]], warnings: list[str]) -> dict
     price_lines = _numeric_lines(row_lines, x_min=width * 0.75, x_max=width * 1.05)
     cost_price, current_price = _extract_cost_and_price(price_lines)
 
-    if not display_name:
-        warnings.append("ths_row: 缺少证券名称，已跳过")
     return {
         "display_name": display_name,
         "symbol": None,
@@ -194,9 +204,6 @@ def _build_alipay_row(
     daily_profit = _second_non_percent(center_lines)
     profit_amount = _first_non_percent(right_lines)
     profit_pct = _first_percent(right_lines)
-    if market_value is None:
-        warnings.append(f"alipay_row:{display_name}: 未识别到持有金额")
-
     return {
         "display_name": display_name,
         "symbol": None,
@@ -369,7 +376,9 @@ def _derive_confidence(
 
 def _looks_like_name(text: str, *, ignored: set[str]) -> bool:
     normalized = text.strip().lower()
-    if not normalized or normalized in ignored:
+    compact = re.sub(r"\s+", "", normalized)
+    ignored_compact = {re.sub(r"\s+", "", item.lower()) for item in ignored}
+    if not normalized or normalized in ignored or compact in ignored_compact:
         return False
     if re.fullmatch(r"[+\-]?\d[\d,]*(?:\.\d+)?%?", text):
         return False
@@ -383,13 +392,49 @@ def _looks_like_etf(name: str) -> bool:
 
 
 def _extract_number(text: str) -> float | None:
-    normalized = str(text or "").replace(",", "").replace("，", "").replace("¥", "").replace("￥", "")
+    normalized = str(text or "").replace("，", ",").replace("¥", "").replace("￥", "")
     normalized = normalized.replace("%", "").strip()
-    match = re.search(r"[+\-]?\d+(?:\.\d+)?", normalized)
+    match = re.search(r"[+\-]?\d[\d,.]*", normalized)
     if not match:
         return None
+    token = _normalize_numeric_token(match.group(0))
     try:
-        return float(match.group(0))
+        return float(token)
     except ValueError:
         return None
 
+
+def _normalize_numeric_token(token: str) -> str:
+    token = token.strip().replace(",", "")
+    if not token:
+        return token
+    sign = ""
+    if token[0] in "+-":
+        sign = token[0]
+        token = token[1:]
+    if token.count(".") > 1:
+        integer_part, decimal_part = token.rsplit(".", 1)
+        token = f"{integer_part.replace('.', '')}.{decimal_part}"
+    return f"{sign}{token}"
+
+
+def _is_valid_ths_row(row: dict[str, Any]) -> bool:
+    display_name = str(row.get("display_name") or "").strip()
+    if not display_name:
+        return False
+    if any(keyword in display_name for keyword in _THS_NOISE_KEYWORDS):
+        return False
+    if row.get("market_value") is None or row.get("quantity") is None:
+        return False
+    return row.get("price") is not None or row.get("cost_price") is not None or row.get("profit_amount") is not None
+
+
+def _is_valid_alipay_row(row: dict[str, Any]) -> bool:
+    display_name = str(row.get("display_name") or "").strip()
+    if not display_name:
+        return False
+    if any(keyword in display_name for keyword in _ALIPAY_NOISE_KEYWORDS):
+        return False
+    if row.get("market_value") is None:
+        return False
+    return row.get("profit_amount") is not None or row.get("profit_pct") is not None
