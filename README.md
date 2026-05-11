@@ -47,7 +47,8 @@ Main endpoints:
 - `GET /cases`
 - `POST /cases`
 
-See [API Contract](docs/api-contract.md) for request and response examples.
+See [API Contract](docs/api-contract.md) for the endpoint contract and
+[Integration Guide](docs/integration-guide.zh-CN.md) for consumer-side examples.
 
 ## Quick Start
 
