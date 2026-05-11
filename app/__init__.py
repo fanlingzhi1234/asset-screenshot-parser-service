@@ -1,0 +1,2 @@
+"""Asset screenshot parser service."""
+

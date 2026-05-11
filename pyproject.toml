@@ -1,0 +1,11 @@
+[project]
+name = "asset-screenshot-parser-service"
+version = "0.1.0"
+description = "Reusable OCR-backed asset screenshot parser service"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
